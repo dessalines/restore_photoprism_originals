@@ -1,6 +1,6 @@
 extern crate glob;
 
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error};
 use clap::Parser;
 use glob::glob;
 use serde_json::Value;
@@ -26,21 +26,7 @@ fn main() -> Result<(), Error> {
   let out_dir = Path::new(&args.out_dir).to_path_buf();
   let photoprism_dir = Path::new(&args.photoprism_dir).to_path_buf();
 
-  let image_datas = read_files(&photoprism_dir)?;
-
-  for image_data in &image_datas {
-    let new_file_path = build_new_file_path(image_data, &out_dir)?;
-
-    if !new_file_path.exists() {
-      copy_original_file(image_data, &new_file_path)?;
-      copy_exif_tags(&image_data.json_path, &new_file_path)?;
-    } else {
-      println!(
-        "Picture has already been copied: {}",
-        new_file_path.to_str().context("no path")?
-      );
-    }
-  }
+  iterate_files(&photoprism_dir, &out_dir)?;
 
   Ok(())
 }
@@ -78,7 +64,7 @@ struct ImageAndJsonPaths {
   json_path: PathBuf,
 }
 
-fn read_files(photoprism_dir: &Path) -> Result<Vec<ImageAndJsonPaths>, Error> {
+fn iterate_files(photoprism_dir: &Path, out_dir: &Path) -> Result<(), Error> {
   println!("Reading files...");
 
   let search_string = photoprism_dir
@@ -86,19 +72,28 @@ fn read_files(photoprism_dir: &Path) -> Result<Vec<ImageAndJsonPaths>, Error> {
     .join("json")
     .join("**")
     .join("*.json");
-  let mut out = Vec::new();
 
   for entry in glob(search_string.to_str().context("no path")?)? {
     let json_path = entry?;
     let thumbnail_path = thumbnail_path_from_json_path(photoprism_dir, &json_path)?;
 
     if thumbnail_path.exists() {
-      let data = ImageAndJsonPaths {
+      let image_data = ImageAndJsonPaths {
         json_path,
         thumbnail_path,
       };
 
-      out.push(data);
+      let new_file_path = build_new_file_path(&image_data, out_dir)?;
+
+      if !new_file_path.exists() {
+        copy_original_file(&image_data, &new_file_path)?;
+        copy_exif_tags(&image_data.json_path, &new_file_path)?;
+      } else {
+        println!(
+          "Picture has already been copied: {}",
+          new_file_path.to_str().context("no path")?
+        );
+      }
     } else {
       println!(
         "Couldn't find {}",
@@ -107,7 +102,7 @@ fn read_files(photoprism_dir: &Path) -> Result<Vec<ImageAndJsonPaths>, Error> {
     }
   }
 
-  Ok(out)
+  Ok(())
 }
 
 fn thumbnail_path_from_json_path(
@@ -147,16 +142,14 @@ fn copy_exif_tags(json_path: &Path, new_file_path: &Path) -> Result<(), Error> {
     "Copying exif tag to {}",
     new_file_path.to_str().context("no file path")?
   );
-  let mut child = Command::new("exiftool")
+  Command::new("exiftool")
     .arg("-tagsfromfile")
     .arg(json_path.to_str().context("no file")?)
     .arg(new_file_path.to_str().context("no file")?)
     .arg("-overwrite_original")
-    .spawn()?;
-  let ecode = child.wait()?;
-  if ecode.success() {
-    Ok(())
-  } else {
-    Err(anyhow!("Couldn't run exiftool"))
-  }
+    .spawn()?
+    .wait()?;
+
+  // Sometimes you'll get a png error, so just consider it a success
+  Ok(())
 }
