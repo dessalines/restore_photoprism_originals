@@ -1,13 +1,13 @@
 extern crate glob;
 
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use clap::Parser;
 use glob::glob;
 use serde_json::Value;
 use std::{
   fs,
   path::{Path, PathBuf},
-  process::{Child, Command},
+  process::Command,
 };
 
 #[derive(Parser, Debug)]
@@ -142,16 +142,21 @@ fn thumbnail_path_from_json_path(
 
 // EXIFTOOL command:
 // exiftool -tagsfromfile c03e484261bbdddbb81f6a703e8b5adf4b8b5bac_exiftool.json bhagat-singh_2qmc.jpg
-fn copy_exif_tags(json_path: &Path, new_file_path: &Path) -> Result<Child, Error> {
+fn copy_exif_tags(json_path: &Path, new_file_path: &Path) -> Result<(), Error> {
   println!(
     "Copying exif tag to {}",
     new_file_path.to_str().context("no file path")?
   );
-  let out = Command::new("exiftool")
+  let mut child = Command::new("exiftool")
     .arg("-tagsfromfile")
     .arg(json_path.to_str().context("no file")?)
     .arg(new_file_path.to_str().context("no file")?)
     .arg("-overwrite_original")
     .spawn()?;
-  Ok(out)
+  let ecode = child.wait()?;
+  if ecode.success() {
+    Ok(())
+  } else {
+    Err(anyhow!("Couldn't run exiftool"))
+  }
 }
