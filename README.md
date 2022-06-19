@@ -2,6 +2,10 @@
 
 This program can restore photos and their directories, along with exif data, from the preserved photoprism thumbnails and json cache directories.
 
+## Requirements
+
+- exiftool
+
 ## Usage
 
 ```
