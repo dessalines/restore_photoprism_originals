@@ -30,6 +30,7 @@ fn main() -> Result<(), Error> {
 
   Ok(())
 }
+
 fn build_new_file_path(image_data: &ImageAndJsonPaths, out_dir: &Path) -> Result<PathBuf, Error> {
   let data = fs::read_to_string(image_data.json_path.as_path())?;
   let json: Value = serde_json::from_str(&data)?;
@@ -71,9 +72,12 @@ fn iterate_files(photoprism_dir: &Path, out_dir: &Path) -> Result<(), Error> {
     .join("cache")
     .join("json")
     .join("**")
-    .join("*.json");
+    .join("*.json")
+    .to_str()
+    .context("no path")?
+    .to_string();
 
-  for entry in glob(search_string.to_str().context("no path")?)? {
+  for entry in glob(&search_string)? {
     let json_path = entry?;
     let thumbnail_path = thumbnail_path_from_json_path(photoprism_dir, &json_path)?;
 
